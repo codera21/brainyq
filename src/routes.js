@@ -1,4 +1,5 @@
 const Apify = require('apify');
+const fs = require('fs');
 
 const {
     utils: { log },
@@ -23,26 +24,42 @@ exports.handleStart = async ({ $, request, crawler: { requestQueue } }) => {
             },
         });
     }
+    log.info(`${authors.length} Authors found`);
     authors.forEach(async (url) => {
         await requestQueue.addRequest({
             url: `https://www.brainyquote.com${url}`,
             userData: {
-                label: 'DETAILS',
+                label: 'LIST',
             },
         });
     });
 };
 
-exports.handleList = async ({ request, $ }) => {
-    // taking the lists of qoutes.
+exports.handleList = async ({ request, $, response }) => {
+    // taking the lists of qoutes, not using pagination first coz i think we can get 5k quotes
     // scrape the list only (might need to load details as per the need.)
-    // source html => name req_id
+
     // detail_url, quote, author, req_id , id, html_chunk
 
-    const quoteBlock = $('div[id*=pos_]');
+    const html = `<html>${$('html').html()}</html>`;
+    fs.writeFileSync(`./apify_storage/html/${request.id}.html`, html);
 
-    for (let i = 0; i < quoteBlock.length; i++) {
-        
+    const quoteBlocks = $('div[id*=pos_]');
+
+    for (let i = 0; i < quoteBlocks.length; i++) {
+        const quoteBlock = quoteBlocks.eq(i);
+        const ret = {
+            req_id: request.id,
+            url: request.url,
+            detail_url: `https://www.brainyquote.com${quoteBlock
+                .find('a[title="view quote"]')
+                .attr('href')}`,
+            qoute: quoteBlock.find('a[title="view quote"] div').text(),
+            author: quoteBlock.find('a[title="view author"]').text(),
+            html_chunk: quoteBlock.html(),
+        };  
+
+        await Apify.pushData(ret);
     }
 };
 
